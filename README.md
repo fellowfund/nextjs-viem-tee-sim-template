@@ -21,12 +21,12 @@ yarn
 
 Build the docker image
 ```shell
-docker build -t your-dapp:latest .
+docker build -t fellowfund-api:latest .
 ```
 
 After the build is successful, run your docker image to connect to the TEE Attestation Simulator
 > NOTE: Your docker image hash will be different than the one listed below.
 ```shell
-docker run --rm -p 3000:3000 your-dapp:latest
+docker run --rm -p 3000:3000 fellowfund-api:latest
 ```
 
