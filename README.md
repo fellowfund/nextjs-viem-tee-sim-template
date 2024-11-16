@@ -1,11 +1,22 @@
-# Next.js viem TEE Simulator Template
+# FellowFund TEE-based Oracle using Phala Network
+
+This repo was strongly based on the [nextjs-viem-tee-sim-template](https://github.com/Phala-Network/nextjs-viem-tee-sim-template) project.
 
 ## Requirements
+
 - [Node](https://nodejs.org/en) >= v18.18
 - [yarn](https://yarnpkg.com/)
 - Docker or Orbstack
 
-## Getting Started
+## Quickstart
+
+Use docker-compose to bootstrap both the TEE Attestation Simulator and the FellowFund API backend to evaluate metrics, running within the TEE.
+
+```
+docker compose up -d
+```
+
+## Development
 
 First, run the TEE Attestation Simulator:
 
