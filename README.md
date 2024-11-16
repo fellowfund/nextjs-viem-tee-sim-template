@@ -41,3 +41,10 @@ After the build is successful, run your docker image to connect to the TEE Attes
 docker run --rm -p 3000:3000 fellowfund-api:latest
 ```
 
+## TEE Simulator Info
+
+The following is the TEE Simulator address:
+
+```
+0xB20F6adf676D488b22962f0C84CD011BE6DD63cB
+```
