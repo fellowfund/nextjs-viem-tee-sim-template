@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  tappd-simulator:
+    image: phalanetwork/tappd-simulator:latest
+    ports:
+      - "8090:8090"
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - DSTACK_SIMULATOR_ENDPOINT=http://tappd-simulator:8090
+    env_file:
+      - .env.local
+    ports:
+      - "3000:3000"
+    depends_on:
+      - tappd-simulator

@@ -1,49 +1,203 @@
-import { http, createPublicClient, stringify } from 'viem'
+import { http, createPublicClient, stringify, createWalletClient, keccak256 } from 'viem'
 import { mantleSepoliaTestnet } from 'viem/chains'
 import * as github from '../../github/github'
 import superjson from 'superjson'
+import { TappdClient } from '@phala/dstack-sdk'
+import { privateKeyToAccount } from 'viem/accounts'
 
 const client = createPublicClient({
   chain: mantleSepoliaTestnet,
   transport: http(),
 })
 
+const endpoint = process.env.DSTACK_SIMULATOR_ENDPOINT || 'http://localhost:8090'
+
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
 
-  // The following code is just an example
-  const [blockNumber, block] = await Promise.all([
-    client.getBlockNumber(),
-    client.getBlock()
-  ]);
+  const fellowApplicants = [
+    {
+        fellowshipId: 1,
+        applicantId: 123,
+        githubHandle: 'thedanielmark',
+        githubOrg: 'fellowfund', 
+        fellowAddress: '',
+        fellowshipStartDate: '2024-01-01',
+        fellowshipEndDate: '2024-11-16',
+        kpiTargets: {
+            totalCommits: {
+                targetValue: 3,
+                weight: 0.7
+            },
+            poapEvents: {
+                targetValue: 1,
+                weight: 0.3
+            }
+        }
+    },
+    {
+        fellowshipId: 1,
+        githubHandle: 'gsmachado',
+        githubOrg: 'fellowfund',
+        fellowAddress: '0x9DaD0C0903dcD9a691504c674D8D87bF570e4fC4',
+        fellowshipStartDate: '2024-01-01',
+        fellowshipEndDate: '2024-11-16',
+        kpiTargets: {
+            totalCommits: {
+                targetValue: 1,
+                weight: 0.7
+            },
+            poapEvents: {
+                targetValue: 1,
+                weight: 0.3
+            }
+        }
+    }
+  ]
 
-  // get all fellowship applicants (including Ids, github handle, and metric targets)
-  // [ 
-  //  { 
-  //    fellowshipId: 1,
-  //    githubHandle: 'thedanielmark',
-  //    githubOrg: 'fellowfund',
-  //    fellowshipStartDate: '2024-01-01',  
-  //    fellowshipEndDate: '2024-11-16',
-  //    kpiTargets: {
-  //     totalCommits: 100,
-  //     poapEvents: 10
-  //    }
-  //  }
-  // ]
+  var kpiStatus = [ ]
 
-  // for each applicant, get total commits and poap events for the fellowship period
-  const commits = await github.getCommitsHandler('fellowfund', 'thedanielmark', '2024-01-01T00:00:00Z', '2024-11-16T00:00:00Z')
-  console.log(`commits: ${JSON.stringify(commits, null, 2)}`)
-  console.log(`total commits: ${commits.totalCommits}`)
+  // Iterate through each fellowship applicant
+  for (const applicant of fellowApplicants) {
+    console.log(`Processing applicant: ${applicant.githubHandle}`);
 
-  // evaluate if the applicant met the kpi targets or not
+    let totalMeasuredCommits = 0;
+    let totalMeasuredPoapEvents = 0;
+    // Get commits
+    try {
+      const commits = await github.getCommitsHandler(
+        'fellowfund',
+        applicant.githubHandle,
+        `${applicant.fellowshipStartDate}T00:00:00Z`,
+        `${applicant.fellowshipEndDate}T00:00:00Z`
+      );
+      totalMeasuredCommits = commits?.totalCommits ?? 0;
+      console.log(`Total commits for ${applicant.githubHandle}: ${totalMeasuredCommits}`);
+    } catch (error) {
+      console.error(`Error fetching commits for ${applicant.githubHandle}:`, error);
+      // Keep totalCommits as 0 on error
+    }
+
+    // Get POAP events if fellow address exists
+    if (applicant.fellowAddress) {
+      try {
+        const poapResponse = await fetch(
+          `https://api.poap.tech/actions/scan/${applicant.fellowAddress}`,
+          {
+            headers: {
+              'accept': 'application/json',
+              'x-api-key': process.env.POAP_API_KEY || ''
+            }
+          }
+        );
+
+        if (poapResponse.ok) {
+          const poapEvents = await poapResponse.json();
+          totalMeasuredPoapEvents = Array.isArray(poapEvents) ? poapEvents.length : 0;
+        }
+        console.log(`Total POAP events for ${applicant.githubHandle} / ${applicant.fellowAddress}: ${totalMeasuredPoapEvents}`);
+      } catch (error) {
+        console.error(`Error fetching POAP data for ${applicant.githubHandle}:`, error);
+        // Keep totalPoapEvents as 0 on error
+      }
+    }
+
+    const commitWeight = applicant.kpiTargets.totalCommits.weight ?? 0.0;
+    const poapWeight = applicant.kpiTargets.poapEvents.weight ?? 0.0;
+    const commitTarget = applicant.kpiTargets.totalCommits.targetValue;
+    const poapTarget = applicant.kpiTargets.poapEvents.targetValue;
+    const weightedScoreTarget = (commitTarget * commitWeight) + (poapTarget * poapWeight);
+    const weightedScoreAchieved = (totalMeasuredCommits * commitWeight) + (totalMeasuredPoapEvents * poapWeight);
+
+    // KPI is achieved if weightedScoreTarget <= weightedScoreAchieved
+    const kpiAchieved: boolean = weightedScoreTarget <= weightedScoreAchieved;
+
+    console.log(`
+      Weighted KPI calculation for ${applicant.githubHandle} / ${applicant.fellowAddress}:
+      Achieved Commits: ${totalMeasuredCommits}
+      Achieved POAPs: ${totalMeasuredPoapEvents}
+      Weighted Score Target: ${weightedScoreTarget}
+      Weighted Score Achieved: ${weightedScoreAchieved}
+      KPI Achieved: ${kpiAchieved}
+    `);
+
+    kpiStatus.push({
+      fellowshipId: applicant.fellowshipId,
+      applicantId: applicant.applicantId,
+      kpiAchieved: kpiAchieved
+    });
+
+  }
 
   // call the smart contract to update the fellowship kpis/metrics (if they were met or not)
 
+  console.log('Preparing to update KPIs on smart contract...');
+  const publicClient = createPublicClient({
+    chain: mantleSepoliaTestnet, 
+    transport: http(),
+  });
 
-  // the following code is just an example...
-  console.log(`Block Number: ${superjson.serialize(blockNumber).json}`);
-  return Response.json({blockNumber: superjson.serialize(blockNumber).json, block: superjson.serialize(block).json});
+  const walletClient = createWalletClient({
+    chain: mantleSepoliaTestnet,
+    transport: http(), 
+  });
+
+  const client = new TappdClient(endpoint);
+  const testDeriveKey = await client.deriveKey("/", "test");
+  const keccakPrivateKey = keccak256(testDeriveKey.asUint8Array());
+  const account = privateKeyToAccount(keccakPrivateKey);
+  const contractAddress = '0xC5227Cb20493b97bb02fADb20360fe28F52E2eff';
+  const gweiAmount = 420;
+  let result = {
+    derivedPublicKey: account.address,
+    contractAddress,
+    gweiAmount,
+    hash: '',
+    receipt: {}
+  }
+  try {
+    const hash = await walletClient.writeContract({
+      account,
+      address: contractAddress,
+      abi: [
+        {
+          name: 'setApplicantImpact',
+          type: 'function',
+          stateMutability: 'nonpayable',
+          inputs: [{
+            type: 'tuple[]',
+            components: [
+              { name: 'fellowshipId', type: 'uint256' },
+              { name: 'applicantId', type: 'uint256' },
+              { name: 'kpiAchieved', type: 'bool' }
+            ]
+          }],
+          outputs: []
+        }
+      ],
+      functionName: 'setApplicantImpact',
+      args: [kpiStatus.map(status => ({
+        fellowshipId: BigInt(status.fellowshipId || 0),
+        applicantId: BigInt(status.applicantId || 0), 
+        kpiAchieved: Boolean(status.kpiAchieved)
+      }))]
+    });
+
+    console.log(`Transaction Hash: ${hash}`);
+    const receipt = await publicClient.waitForTransactionReceipt({ hash });
+    console.log(`Transaction Status: ${receipt.status}`);
+    
+    const blockNumber = receipt.blockNumber;
+    const block = await publicClient.getBlock({ blockNumber });
+
+  } catch (e) {
+    console.error('Error updating KPIs:', e);
+    return Response.json({error: e});
+  }
+
+  const { json: jsonResult , meta } = superjson.serialize(result)
+  console.log(`transaction: ${Response.json({ jsonResult })}`);
+
+  return Response.json({ jsonResult });
 }
